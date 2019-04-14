@@ -1,0 +1,7 @@
+public {{{returnType}}} create{{{returnType}}}() {
+    {{> constructor}}
+    {{#setters}}
+    {{> setter}}
+    {{/setters}}
+    return {{{localVariableName}}};
+}
