@@ -48,6 +48,11 @@ public class SerializerTest {
         log.info(actualJavaCode);
         assertThat(actualJavaCode, is(expectedJavaCode));
     }
+
+    @Test
+    public void writePojo3ToCode() {
+        final String actualJavaCode = serializer.writePojoToCode(new SimplePojo3());
+    }
 }
 
 @Data
@@ -62,4 +67,10 @@ class SimplePojo2 {
     String name = "Joe \"Captain Crunch\" Doe";
     int[] ages = {12, 13, 14};
     LocalDate justDate = LocalDate.of(2012, 3, 17);
+}
+@Data
+class SimplePojo3 {
+    String name = "okay okay";
+    int[] ages = {12, 13, 14};
+    SimplePojo2 refToPojo = new SimplePojo2();
 }

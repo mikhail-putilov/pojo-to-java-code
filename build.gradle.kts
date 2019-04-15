@@ -27,8 +27,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-mustache")
     implementation("com.fasterxml.jackson.core:jackson-databind")
     implementation("org.apache.commons:commons-text:1.6")
+    
     compileOnly("org.projectlombok:lombok")
     testCompileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
+    testAnnotationProcessor("org.projectlombok:lombok")
+    
     testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
