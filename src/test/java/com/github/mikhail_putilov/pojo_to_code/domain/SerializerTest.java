@@ -2,6 +2,7 @@ package com.github.mikhail_putilov.pojo_to_code.domain;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import static org.hamcrest.Matchers.is;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest
+@Slf4j
 public class SerializerTest {
 
     @Autowired
@@ -20,11 +22,15 @@ public class SerializerTest {
 
     @Test
     public void writePojoToCode() {
-        final String javaCode = serializer.writePojoToCode(new SimplePojo());
-        assertThat(javaCode, is("final SimplePojo simplePojo = new SimplePojo();\n" +
-                "simplePojo.setName(\"name1\");\n" +
-                "simplePojo.setAge(12);\n" +
-                "simplePojo.setIndex(13025);"));
+        final String actualJavaCode = serializer.writePojoToCode(new SimplePojo());
+        String expectedJavaCode = "public SimplePojo createSimplePojo() {\n" +
+            "    SimplePojo simplePojo = new SimplePojo();\n" +
+            "    simplePojo.setAge(12);\n" +
+            "    simplePojo.setName(\"name1\");\n" +
+            "    simplePojo.setIndex(13025);\n" +
+            "    return simplePojo;\n" +
+            "}";
+        assertThat(actualJavaCode, is(expectedJavaCode));
     }
 }
 
