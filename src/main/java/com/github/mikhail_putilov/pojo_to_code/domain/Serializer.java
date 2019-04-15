@@ -5,6 +5,7 @@ import com.samskivert.mustache.Mustache;
 import com.samskivert.mustache.Template;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.springframework.beans.factory.annotation.Lookup;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -16,8 +17,11 @@ public class Serializer {
     @SneakyThrows(Exception.class)
     public String writePojoToCode(Object pojo) {
         final Template bootstrapTemplate = mustache.compile(templateLoader.getTemplate("bootstrap"));
-        return bootstrapTemplate.execute(new Model(pojo));
+        return bootstrapTemplate.execute(createModel(pojo));
     }
 
-
+    @Lookup
+    Model createModel(Object pojo) {
+        return null;
+    }
 }
