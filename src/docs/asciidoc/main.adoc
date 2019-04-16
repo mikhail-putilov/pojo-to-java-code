@@ -1,7 +1,5 @@
 I, as a developer, want a function, that maps
 POJO -> java factory
 
-Foreach property p of POJO:
-    if property p is primitive:
-        return emit(p)
-
+Given pojo p
+When

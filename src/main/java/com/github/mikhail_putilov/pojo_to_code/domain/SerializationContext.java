@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -14,9 +15,10 @@ import java.util.Set;
 @Slf4j
 public class SerializationContext {
     private Set<Object> visited = new HashSet<>();
-    private static List<FactoryMethod> builtinFactories = List.of(new PrimitiveFactoryMethod());
-    private List<FactoryMethod> factories = new ArrayList<>(builtinFactories);
+    private List<FactoryMethod> factories = new ArrayList<>();
     private Object pojo;
+    private Set<Class<?>> stopList = Set.of(Class.class, ClassLoader.class);
+
     private Set<Class<?>> knownClasses = Set.of(
         Long.class,
         long[].class,
@@ -41,14 +43,16 @@ public class SerializationContext {
         this.pojo = pojo;
     }
 
-    public FactoryMethod getFactoryMethodForModel() {
+    public List<FactoryMethod> getFactoryMethodsForPojo() {
         dfs(pojo);
-        return factories.get(0);
+        return factories;
     }
 
     private void dfs(Object pojo) {
-        visit(pojo);
         visited.add(pojo);
+        if (isInStopList(pojo.getClass())) {
+            return;
+        }
         for (Object adjacentPojo : getAdjacentPojos(pojo)) {
             if (!visited.contains(adjacentPojo)) {
                 dfs(adjacentPojo);
@@ -57,19 +61,24 @@ public class SerializationContext {
         postOrder(pojo);
     }
 
+    private boolean isInStopList(Class<?> aClass) {
+        return stopList.contains(aClass) || aClass.isEnum();
+    }
+
     private void postOrder(Object pojo) {
         FactoryMethod factory = new FactoryMethod(pojo);
         ReflectionUtils.doWithMethods(pojo.getClass(),
-            getter -> pojos.add(invoke(pojo, getter)),
-            this::filterPropertiesWhichNeedsToBeVisited);
+            getter -> factory.addSetter(getter, pojo),
+            this::filterAccessibleGetters);
         factories.add(factory);
     }
 
     private List<Object> getAdjacentPojos(Object pojo) {
+        log.trace("getAdjacentPojos {}", pojo);
         List<Object> pojos = new ArrayList<>();
         ReflectionUtils.doWithMethods(pojo.getClass(),
             getter -> pojos.add(invoke(pojo, getter)),
-            this::filterPropertiesWhichNeedsToBeVisited);
+            this::filterNonPrimitiveGetters);
         return pojos;
     }
 
@@ -78,38 +87,66 @@ public class SerializationContext {
         return getter.invoke(target);
     }
 
-    private boolean filterPropertiesWhichNeedsToBeVisited(Method method) {
+    private boolean filterAccessibleGetters(Method method) {
+        int modifiers = method.getModifiers();
+        if (Modifier.isStatic(modifiers)) {
+            log.trace("skipping static method {}", method.getName());
+            return false;
+        }
+        if (method.isSynthetic()) {
+            log.trace("skipping {} as it is a synthetic method", method.getName());
+            return false;
+        }
+        if (Modifier.isNative(method.getModifiers())) {
+            log.trace("skipping {} as it is a native method", method.getName());
+            return false;
+        }
+        if (Modifier.isPrivate(method.getModifiers())) {
+            log.trace("skipping {} as it is a private method", method.getName());
+            return false;
+        }
+        if (method.getParameterCount() != 0) {
+            log.trace("getter {} with parameter count > 0 is not a property", method.getName());
+            return false;
+        }
         if (!method.getName().startsWith("get")) {
+            log.trace("{} is not a getter", method.getName());
             return false;
         }
         if ("getClass".equals(method.getName())) {
+            log.trace("skipping getClass as it is not a property");
+            return false;
+        }
+        if ("getClassLoader".equals(method.getName())) {
+            log.trace("skipping getClassLoader as it is not a property");
+            return false;
+        }
+        if ("getClassLoader0".equals(method.getName())) {
+            log.trace("skipping getClassLoader0 as it is not a property");
+            return false;
+        }
+        return true;
+    }
+
+    private boolean filterNonPrimitiveGetters(Method method) {
+        if (!filterAccessibleGetters(method)) {
             return false;
         }
         Class<?> returnType = method.getReturnType();
         if (returnType.isPrimitive()) {
-            log.info("need visit? {} -> {}", returnType, false);
+            log.trace("skipping {} as it is a primitive property", method.getName());
             return false;
         }
-        log.info("need visit? {} -> {}", returnType.getSimpleName(), !knownClasses.contains(returnType));
-        return !knownClasses.contains(returnType);
-    }
-
-    private void visit(Object object) {
-        log.info("creating factory method for {}", object);
-        log.info("foreach all props and create primitive setters");
-    }
-
-    public Setter createSetter(Method getter, Object pojo) {
-        if (getter.getReturnType().isPrimitive()) {
-            return new PrimitiveSetter(getter, pojo);
-        } else if (getter.getReturnType().equals(String.class)) {
-            return new StringSetter(getter, pojo);
-        } else if (getter.getReturnType().equals(LocalDate.class)) {
-            return new LocalDateSetter(getter, pojo);
-        } else if (getter.getReturnType().isArray()) {
-            return new ArraySetter(getter, pojo);
-        } else {
-            throw new IllegalStateException();
+        if (returnType.isEnum()) {
+            log.trace("skipping {} as it is a enum property", method.getName());
+            return false;
         }
+        boolean isNeededAnotherFactoryMethod = !knownClasses.contains(returnType);
+        if (isNeededAnotherFactoryMethod) {
+            log.trace("{} needs another factory method", method.getName());
+        } else {
+            log.trace("{} doesn't need factory method", method.getName());
+        }
+        return isNeededAnotherFactoryMethod;
     }
 }

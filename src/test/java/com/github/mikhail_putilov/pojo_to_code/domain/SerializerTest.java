@@ -31,6 +31,8 @@ public class SerializerTest {
             "    simplePojo.setIndex(13025);\n" +
             "    return simplePojo;\n" +
             "}";
+        log.info(actualJavaCode);
+        log.info(expectedJavaCode);
         assertThat(actualJavaCode, is(expectedJavaCode));
     }
 
@@ -52,6 +54,7 @@ public class SerializerTest {
     @Test
     public void writePojo3ToCode() {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojo3());
+        log.info(actualJavaCode);
     }
 }
 

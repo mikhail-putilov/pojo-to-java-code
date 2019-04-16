@@ -1,7 +1,9 @@
+{{#factories}}
 public {{{returnType}}} create{{{returnType}}}() {
-    {{> constructor}}
+    {{{returnType}}} {{{localVariableName}}} = new {{{returnType}}}();
     {{#setters}}
-    {{> setter}}
+    {{{localVariableName}}}.set{{{propertyName}}}({{{propertyValue}}});
     {{/setters}}
     return {{{localVariableName}}};
 }
+{{/factories}}
