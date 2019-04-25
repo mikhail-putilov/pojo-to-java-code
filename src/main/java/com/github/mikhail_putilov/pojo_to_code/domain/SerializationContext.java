@@ -72,6 +72,7 @@ public class SerializationContext {
             this::filterAccessibleGetters);
 
         List<? extends SetterView> setterViews = getters.stream()
+            .sequential()
             .filter(getter -> typeToJavaCreateCodeFunctions.get(getter.getReturnType()).isPresent())
             // which means we can create a setter view right away!
             .map(getter -> {
@@ -125,15 +126,15 @@ public class SerializationContext {
             log.trace("method \"{}\" is not a getter", method.getName());
             return false;
         }
-        if ("getClass".equals(method.getName())) {
+        if ("getClass".equals(method.getName()) && method.getReturnType().isAssignableFrom(Class.class)) {
             log.trace("skipping \"getClass\" as it is not a property");
             return false;
         }
-        if ("getClassLoader".equals(method.getName())) {
+        if ("getClassLoader".equals(method.getName()) && method.getReturnType().isAssignableFrom(ClassLoader.class)) {
             log.trace("skipping \"getClassLoader\" as it is not a property");
             return false;
         }
-        if ("getClassLoader0".equals(method.getName())) {
+        if ("getClassLoader0".equals(method.getName()) && method.getReturnType().isAssignableFrom(ClassLoader.class)) {
             log.trace("skipping \"getClassLoader0\" as it is not a property");
             return false;
         }
