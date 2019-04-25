@@ -1,6 +1,7 @@
 package com.github.mikhail_putilov.pojo_to_code.domain.view;
 
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.List;
 
@@ -17,6 +18,9 @@ public class FactoryMethodView {
     private final String localVariableName = uncapitalize(getReturnType());
     @Getter
     private final List<? extends SetterView> setterViews;
+    @Getter
+    @Setter
+    private String factoryMethodName;
 
     public FactoryMethodView(Object pojo, List<? extends SetterView> setterViews) {
         clazz = pojo.getClass();

@@ -1,6 +1,5 @@
 package com.github.mikhail_putilov.pojo_to_code.domain;
 
-import com.github.mikhail_putilov.pojo_to_code.domain.create_function.TypeToJavaCreateCodeFunction;
 import com.github.mikhail_putilov.pojo_to_code.domain.create_function.TypeToJavaCreateCodeFunctions;
 import com.github.mikhail_putilov.pojo_to_code.domain.view.FactoryMethodView;
 import com.github.mikhail_putilov.pojo_to_code.domain.view.SetterView;
@@ -16,6 +15,7 @@ import org.springframework.util.ReflectionUtils;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.springframework.beans.factory.config.BeanDefinition.SCOPE_PROTOTYPE;
@@ -41,21 +41,27 @@ public class SerializationContext {
     }
 
     public List<FactoryMethodView> getFactoryMethodsForPojo() {
-        dfs(pojo);
+        dfs(pojo, this::firstPostOrderVisit);
+        visitedPojos.clear();
+        dfs(pojo, this::postOrderVisit);
         return factoryMethodViews;
     }
 
-    private void dfs(Object pojo) {
+    private void firstPostOrderVisit(Object pojo) {
+        typeToJavaCreateCodeFunctions.learnClass(pojo.getClass());
+    }
+
+    private void dfs(Object pojo, Consumer<Object> postOrderVisitFunc) {
         visitedPojos.add(pojo);
         if (!isStopNeeded(pojo.getClass())) {
             // if pojo is not in a stop list, we traverse its adjacent pojos
             for (Object adjacentPojo : getAdjacentPojos(pojo)) {
                 if (!visitedPojos.contains(adjacentPojo)) {
-                    dfs(adjacentPojo);
+                    dfs(adjacentPojo, postOrderVisitFunc);
                 }
             }
         }
-        postOrderVisit(pojo);
+        postOrderVisitFunc.accept(pojo);
     }
 
     /**
@@ -72,14 +78,9 @@ public class SerializationContext {
             this::filterAccessibleGetters);
 
         List<? extends SetterView> setterViews = getters.stream()
+            // important to preserve same order of properties
             .sequential()
-            .filter(getter -> typeToJavaCreateCodeFunctions.get(getter.getReturnType()).isPresent())
-            // which means we can create a setter view right away!
-            .map(getter -> {
-                Class<?> returnType = getter.getReturnType();
-                TypeToJavaCreateCodeFunction mapFunc = typeToJavaCreateCodeFunctions.get(returnType).orElseThrow();
-                return new SetterViewImpl(getter, pojo, mapFunc);
-            })
+            .map(getter -> new SetterViewImpl(getter, pojo, typeToJavaCreateCodeFunctions.get(getter)))
             .collect(Collectors.toList());
 
         FactoryMethodView factory = new FactoryMethodView(pojo, setterViews);
@@ -154,8 +155,8 @@ public class SerializationContext {
             log.trace("skipping \"{}\" as it is a enum property", method.getName());
             return false;
         }
-        Optional<TypeToJavaCreateCodeFunction> typeToJavaCreateCodeFunction = typeToJavaCreateCodeFunctions.get(returnType);
-        if (typeToJavaCreateCodeFunction.isPresent()) {
+        boolean doesNotNeedIdentityMapper = typeToJavaCreateCodeFunctions.doesNotNeedIdentityMapper(method);
+        if (doesNotNeedIdentityMapper) {
             log.trace("skipping \"{}\" as it can be created in-place", method.getName());
             return false;
         }

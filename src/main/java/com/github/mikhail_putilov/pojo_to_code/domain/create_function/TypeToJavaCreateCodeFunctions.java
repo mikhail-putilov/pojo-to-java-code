@@ -3,15 +3,26 @@ package com.github.mikhail_putilov.pojo_to_code.domain.create_function;
 import org.apache.commons.text.StringEscapeUtils;
 import org.springframework.stereotype.Component;
 
+import java.lang.reflect.Method;
 import java.time.LocalDate;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * A collection of predefined {@link TypeToJavaCreateCodeFunction} functions
  */
 @Component
 public class TypeToJavaCreateCodeFunctions {
-    private final Map<Class<?>, Object> clazzToMapper = new HashMap<>();
+    /**
+     * Mappers that are not dependent on identity of created object, like numbers, strings, dates. Not pojos!
+     */
+    private final Map<Class<?>, Object> notIdentityMappers = new HashMap<>();
+    /**
+     * For each class type we need to track number of instances so that we can generate unique method names for them
+     */
+    private final Map<Class<?>, Integer> identityCounters = new HashMap<>();
 
     public TypeToJavaCreateCodeFunctions() {
         put(Long.class, String::valueOf);
@@ -49,23 +60,35 @@ public class TypeToJavaCreateCodeFunctions {
     }
 
     private <T> void put(Class<T> clazz, TypeToJavaCreateCodeFunction<T> mapper) {
-        clazzToMapper.put(Objects.requireNonNull(clazz), mapper);
+        notIdentityMappers.put(Objects.requireNonNull(clazz), mapper);
     }
 
-    private <T> void putIfAbsent(Class<T> clazz, TypeToJavaCreateCodeFunction<T> mapper) {
-        clazzToMapper.putIfAbsent(Objects.requireNonNull(clazz), mapper);
-    }
-
-    public Optional<TypeToJavaCreateCodeFunction> get(Class clazz) {
-        if (clazz.isEnum()) {
-            //noinspection unchecked
-            putIfAbsent(clazz, enumFunctionOf(clazz));
+    public TypeToJavaCreateCodeFunction get(Method getter) {
+        Class<?> returnType = getter.getReturnType();
+        if (returnType.isEnum()) {
+            return enumObject -> returnType.getSimpleName() + "." + enumObject.toString();
         }
-        return Optional.ofNullable((TypeToJavaCreateCodeFunction) clazzToMapper.get(clazz));
+        if (notIdentityMappers.containsKey(returnType)) {
+            return (TypeToJavaCreateCodeFunction) notIdentityMappers.get(returnType);
+        }
+        if (identityCounters.get(returnType).equals(0)) {
+            return pojoObject -> "create" + getter.getReturnType().getSimpleName() + "()";
+        }
+        return pojoObject -> {
+            Integer discriminator = identityCounters.compute(returnType, (aClass, counter) -> counter - 1);
+            return "create" + getter.getName().replaceFirst("get", "") + discriminator + "()";
+        };
     }
 
-    private TypeToJavaCreateCodeFunction enumFunctionOf(Class enumType) {
-        return o -> enumType.getSimpleName() + "." + o.toString();
+    public void learnClass(Class<?> clazz) {
+        if (!notIdentityMappers.containsKey(clazz)) {
+            identityCounters.putIfAbsent(clazz, -1);
+            identityCounters.compute(clazz, (aClass, counter) -> counter + 1);
+        }
+    }
+
+    public boolean doesNotNeedIdentityMapper(Method method) {
+        return notIdentityMappers.containsKey(method.getReturnType());
     }
 
     private static String replaceBrackets(String arrayStr) {
