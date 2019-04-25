@@ -1,128 +1,140 @@
 package com.github.mikhail_putilov.pojo_to_code.domain;
 
+import com.github.mikhail_putilov.pojo_to_code.domain.create_function.TypeToJavaCreateCodeFunction;
+import com.github.mikhail_putilov.pojo_to_code.domain.create_function.TypeToJavaCreateCodeFunctions;
+import com.github.mikhail_putilov.pojo_to_code.domain.view.FactoryMethodView;
+import com.github.mikhail_putilov.pojo_to_code.domain.view.SetterView;
+import com.github.mikhail_putilov.pojo_to_code.domain.view.SetterViewImpl;
+import lombok.Setter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Scope;
+import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
-import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
+
+import static org.springframework.beans.factory.config.BeanDefinition.SCOPE_PROTOTYPE;
 
 @Slf4j
+@Component
+@Scope(SCOPE_PROTOTYPE)
 public class SerializationContext {
-    private Set<Object> visited = new HashSet<>();
-    private List<FactoryMethod> factories = new ArrayList<>();
-    private Object pojo;
-    private Set<Class<?>> stopList = Set.of(Class.class, ClassLoader.class);
+    private final Object pojo;
+    private Set<Object> visitedPojos = Collections.newSetFromMap(new IdentityHashMap<>());
+    private List<FactoryMethodView> factoryMethodViews = new ArrayList<>();
+    private Set<Class<?>> doNotTraverseTheseTypes = Set.of(Class.class, ClassLoader.class);
+    @Setter(onMethod_ = @Autowired)
+    private TypeToJavaCreateCodeFunctions typeToJavaCreateCodeFunctions;
 
-    private Set<Class<?>> knownClasses = Set.of(
-        Long.class,
-        long[].class,
-        Integer.class,
-        int[].class,
-        Short.class,
-        short[].class,
-        Character.class,
-        char[].class,
-        Byte.class,
-        byte[].class,
-        Boolean.class,
-        boolean[].class,
-        Float.class,
-        float[].class,
-        Double.class,
-        double[].class,
-        LocalDate.class,
-        String.class);
-
+    /**
+     * Serialization context is coupled to the only one given pojo.
+     *
+     * @param pojo which needs to be converted to java code
+     */
     public SerializationContext(Object pojo) {
         this.pojo = pojo;
     }
 
-    public List<FactoryMethod> getFactoryMethodsForPojo() {
+    public List<FactoryMethodView> getFactoryMethodsForPojo() {
         dfs(pojo);
-        return factories;
+        return factoryMethodViews;
     }
 
     private void dfs(Object pojo) {
-        visited.add(pojo);
-        if (isInStopList(pojo.getClass())) {
-            return;
-        }
-        for (Object adjacentPojo : getAdjacentPojos(pojo)) {
-            if (!visited.contains(adjacentPojo)) {
-                dfs(adjacentPojo);
+        visitedPojos.add(pojo);
+        if (!isStopNeeded(pojo.getClass())) {
+            // if pojo is not in a stop list, we traverse its adjacent pojos
+            for (Object adjacentPojo : getAdjacentPojos(pojo)) {
+                if (!visitedPojos.contains(adjacentPojo)) {
+                    dfs(adjacentPojo);
+                }
             }
         }
-        postOrder(pojo);
+        postOrderVisit(pojo);
     }
 
-    private boolean isInStopList(Class<?> aClass) {
-        return stopList.contains(aClass) || aClass.isEnum();
+    /**
+     * during DFS java object traversal, we don't need to go deep into Class, ClassLoader and Enum objects.
+     */
+    private boolean isStopNeeded(Class<?> aClass) {
+        return doNotTraverseTheseTypes.contains(aClass) || aClass.isEnum();
     }
 
-    private void postOrder(Object pojo) {
-        FactoryMethod factory = new FactoryMethod(pojo);
+    private void postOrderVisit(Object pojo) {
+        List<Method> getters = new ArrayList<>();
         ReflectionUtils.doWithMethods(pojo.getClass(),
-            getter -> factory.addSetter(getter, pojo),
+            getters::add,
             this::filterAccessibleGetters);
-        factories.add(factory);
+
+        List<? extends SetterView> setterViews = getters.stream()
+            .filter(getter -> typeToJavaCreateCodeFunctions.get(getter.getReturnType()).isPresent())
+            // which means we can create a setter view right away!
+            .map(getter -> {
+                Class<?> returnType = getter.getReturnType();
+                TypeToJavaCreateCodeFunction mapFunc = typeToJavaCreateCodeFunctions.get(returnType).orElseThrow();
+                return new SetterViewImpl(getter, pojo, mapFunc);
+            })
+            .collect(Collectors.toList());
+
+        FactoryMethodView factory = new FactoryMethodView(pojo, setterViews);
+        factoryMethodViews.add(factory);
     }
 
     private List<Object> getAdjacentPojos(Object pojo) {
         log.trace("getAdjacentPojos {}", pojo);
         List<Object> pojos = new ArrayList<>();
         ReflectionUtils.doWithMethods(pojo.getClass(),
-            getter -> pojos.add(invoke(pojo, getter)),
+            getter -> pojos.add(invokeGetterOnPojo(pojo, getter)),
             this::filterNonPrimitiveGetters);
         return pojos;
     }
 
     @SneakyThrows
-    private Object invoke(Object target, Method getter) {
-        return getter.invoke(target);
+    private Object invokeGetterOnPojo(Object pojo, Method getter) {
+        return getter.invoke(pojo);
     }
 
     private boolean filterAccessibleGetters(Method method) {
         int modifiers = method.getModifiers();
         if (Modifier.isStatic(modifiers)) {
-            log.trace("skipping static method {}", method.getName());
+            log.trace("skipping static method \"{}\"", method.getName());
             return false;
         }
         if (method.isSynthetic()) {
-            log.trace("skipping {} as it is a synthetic method", method.getName());
+            log.trace("skipping \"{}\" as it is a synthetic method", method.getName());
             return false;
         }
         if (Modifier.isNative(method.getModifiers())) {
-            log.trace("skipping {} as it is a native method", method.getName());
+            log.trace("skipping \"{}\" as it is a native method", method.getName());
             return false;
         }
         if (Modifier.isPrivate(method.getModifiers())) {
-            log.trace("skipping {} as it is a private method", method.getName());
+            log.trace("skipping \"{}\" as it is a private method", method.getName());
             return false;
         }
         if (method.getParameterCount() != 0) {
-            log.trace("getter {} with parameter count > 0 is not a property", method.getName());
+            log.trace("getter \"{}\" with parameter count > 0 is not a property", method.getName());
             return false;
         }
         if (!method.getName().startsWith("get")) {
-            log.trace("{} is not a getter", method.getName());
+            log.trace("method \"{}\" is not a getter", method.getName());
             return false;
         }
         if ("getClass".equals(method.getName())) {
-            log.trace("skipping getClass as it is not a property");
+            log.trace("skipping \"getClass\" as it is not a property");
             return false;
         }
         if ("getClassLoader".equals(method.getName())) {
-            log.trace("skipping getClassLoader as it is not a property");
+            log.trace("skipping \"getClassLoader\" as it is not a property");
             return false;
         }
         if ("getClassLoader0".equals(method.getName())) {
-            log.trace("skipping getClassLoader0 as it is not a property");
+            log.trace("skipping \"getClassLoader0\" as it is not a property");
             return false;
         }
         return true;
@@ -134,19 +146,18 @@ public class SerializationContext {
         }
         Class<?> returnType = method.getReturnType();
         if (returnType.isPrimitive()) {
-            log.trace("skipping {} as it is a primitive property", method.getName());
+            log.trace("skipping \"{}\" as it is a primitive property", method.getName());
             return false;
         }
         if (returnType.isEnum()) {
-            log.trace("skipping {} as it is a enum property", method.getName());
+            log.trace("skipping \"{}\" as it is a enum property", method.getName());
             return false;
         }
-        boolean isNeededAnotherFactoryMethod = !knownClasses.contains(returnType);
-        if (isNeededAnotherFactoryMethod) {
-            log.trace("{} needs another factory method", method.getName());
-        } else {
-            log.trace("{} doesn't need factory method", method.getName());
+        Optional<TypeToJavaCreateCodeFunction> typeToJavaCreateCodeFunction = typeToJavaCreateCodeFunctions.get(returnType);
+        if (typeToJavaCreateCodeFunction.isPresent()) {
+            log.trace("skipping \"{}\" as it can be created in-place", method.getName());
+            return false;
         }
-        return isNeededAnotherFactoryMethod;
+        return true;
     }
 }

@@ -1,30 +1,25 @@
 package com.github.mikhail_putilov.pojo_to_code.domain;
 
 
-import com.samskivert.mustache.Mustache;
+import com.github.mikhail_putilov.pojo_to_code.domain.view.FactoryMethodView;
 import com.samskivert.mustache.Template;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
 public class Serializer {
-    private final Mustache.Compiler mustache;
-    private final Mustache.TemplateLoader templateLoader;
+    private final Template bootstrap;
+    private final ObjectProvider<SerializationContext> serializationContext;
 
     @SneakyThrows(Exception.class)
     public String writePojoToCode(Object pojo) {
-        final Template bootstrapTemplate = mustache.compile(templateLoader.getTemplate("bootstrap"));
-        List<FactoryMethod> factories = new SerializationContext(pojo).getFactoryMethodsForPojo();
-        return bootstrapTemplate.execute(new Dto(factories));
-    }
-
-    @Data
-    static class Dto {
-        final List<FactoryMethod> factories;
+        List<FactoryMethodView> factories = serializationContext.getObject(pojo).getFactoryMethodsForPojo();
+        return bootstrap.execute(Map.of("factories", factories));
     }
 }
