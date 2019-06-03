@@ -1,9 +1,22 @@
-{{#factories}}
-public {{{returnType}}} create{{{returnType}}}() {
-    {{{returnType}}} {{{localVariableName}}} = new {{{returnType}}}();
-    {{#setterViews}}
-    {{{localVariableName}}}.set{{{propertyName}}}({{{propertyValue}}});
-    {{/setterViews}}
-    return {{{localVariableName}}};
+package {{{packageName}}};
+
+{{#imports}}
+import {{{.}}}
+{{/imports}}
+
+public class {{{className}}} {
+
+    {{#factories}}
+    public {{{returnType}}} {{{factoryMethodName}}}() {
+        {{{returnType}}} {{{localVariableName}}} = new {{{returnType}}}();
+        {{#setters}}
+        {{{localVariableName}}}.set{{{propertyName}}}({{{propertyValue}}});
+        {{/setters}}
+        return {{{localVariableName}}};
+    }
+    {{/factories}}
+    {{^factories}}
+# no factories :(
+    {{/factories}}
+
 }
-{{/factories}}

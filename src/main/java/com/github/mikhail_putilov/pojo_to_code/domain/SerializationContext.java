@@ -1,15 +1,12 @@
 package com.github.mikhail_putilov.pojo_to_code.domain;
 
-import com.github.mikhail_putilov.pojo_to_code.domain.create_function.TypeToJavaCreateCodeFunctions;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.mikhail_putilov.pojo_to_code.domain.create_function.FactoryCodeCreationContext;
+import com.github.mikhail_putilov.pojo_to_code.domain.view.FactoryClassView;
 import com.github.mikhail_putilov.pojo_to_code.domain.view.FactoryMethodView;
 import com.github.mikhail_putilov.pojo_to_code.domain.view.SetterView;
-import com.github.mikhail_putilov.pojo_to_code.domain.view.SetterViewImpl;
-import lombok.Setter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Scope;
-import org.springframework.stereotype.Component;
 import org.springframework.util.ReflectionUtils;
 
 import java.lang.reflect.Method;
@@ -18,37 +15,50 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static org.springframework.beans.factory.config.BeanDefinition.SCOPE_PROTOTYPE;
-
 @Slf4j
-@Component
-@Scope(SCOPE_PROTOTYPE)
 public class SerializationContext {
     private final Object pojo;
-    private Set<Object> visitedPojos = Collections.newSetFromMap(new IdentityHashMap<>());
-    private List<FactoryMethodView> factoryMethodViews = new ArrayList<>();
-    private Set<Class<?>> doNotTraverseTheseTypes = Set.of(Class.class, ClassLoader.class);
-    @Setter(onMethod_ = @Autowired)
-    private TypeToJavaCreateCodeFunctions typeToJavaCreateCodeFunctions;
+    private final ObjectMapper objectMapper;
+    private final Set<Object> visitedPojos = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final List<FactoryMethodView> factoryMethodViews = new ArrayList<>();
+    private final Set<Class<?>> doNotTraverseTheseTypes = Set.of(Class.class, ClassLoader.class);
+    private final FactoryCodeCreationContext factoryCodeCreationContext;
+    private final NameResolver nameResolver;
 
     /**
      * Serialization context is coupled to the only one given pojo.
      *
      * @param pojo which needs to be converted to java code
      */
-    public SerializationContext(Object pojo) {
+    public SerializationContext(Object pojo, ObjectMapper objectMapper, FactoryCodeCreationContext factoryCodeCreationContext, NameResolver nameResolver) {
         this.pojo = pojo;
+        this.objectMapper = objectMapper;
+        this.factoryCodeCreationContext = factoryCodeCreationContext;
+        this.nameResolver = nameResolver;
     }
 
-    public List<FactoryMethodView> getFactoryMethodsForPojo() {
+    public FactoryClassView generateFactoryClass() {
         dfs(pojo, this::firstPostOrderVisit);
         visitedPojos.clear();
+        nameResolver.prepareImports();
         dfs(pojo, this::postOrderVisit);
-        return factoryMethodViews;
+        return buildFactoryClassView();
     }
 
+    private FactoryClassView buildFactoryClassView() {
+        FactoryClassView factoryClass = new FactoryClassView();
+        factoryClass.setClassName("Create" + pojo.getClass().getSimpleName());
+        factoryClass.setFactories(factoryMethodViews);
+        factoryClass.setImports(nameResolver.resolveImports());
+        factoryClass.setPackageName(pojo.getClass().getPackageName());
+        return factoryClass;
+    }
+
+    /**
+     * Gather information about all types, so that we can resolve name clashes effectively
+     */
     private void firstPostOrderVisit(Object pojo) {
-        typeToJavaCreateCodeFunctions.learnClass(pojo.getClass());
+        nameResolver.learnClass(pojo);
     }
 
     private void dfs(Object pojo, Consumer<Object> postOrderVisitFunc) {
@@ -72,19 +82,35 @@ public class SerializationContext {
     }
 
     private void postOrderVisit(Object pojo) {
+        FactoryMethodView factory = buildFactoryMethodView(pojo);
+        factoryMethodViews.add(factory);
+    }
+
+    private FactoryMethodView buildFactoryMethodView(Object pojo) {
         List<Method> getters = new ArrayList<>();
         ReflectionUtils.doWithMethods(pojo.getClass(),
             getters::add,
             this::filterAccessibleGetters);
 
-        List<? extends SetterView> setterViews = getters.stream()
-            // important to preserve same order of properties
+        var setterViews = getters.stream()
             .sequential()
-            .map(getter -> new SetterViewImpl(getter, pojo, typeToJavaCreateCodeFunctions.get(getter)))
+            .map(getter -> buildSetter(getter, pojo))
             .collect(Collectors.toList());
 
-        FactoryMethodView factory = new FactoryMethodView(pojo, setterViews);
-        factoryMethodViews.add(factory);
+        FactoryMethodView factoryMethod = new FactoryMethodView();
+        factoryMethod.setSetters(setterViews);
+        factoryMethod.setFactoryMethodName(nameResolver.resolveFactoryMethodName(pojo));
+        factoryMethod.setLocalVariableName("bean");
+        factoryMethod.setReturnType(nameResolver.resolveReturnType(pojo.getClass()));
+        return factoryMethod;
+    }
+
+    private SetterView buildSetter(Method getter, Object pojo) {
+        SetterView setter = new SetterView();
+        setter.setPropertyNameFromGetter(getter);
+        Object propertyValue = invokeGetterOnPojo(pojo, getter);
+        setter.setPropertyValue(factoryCodeCreationContext.get(propertyValue));
+        return setter;
     }
 
     private List<Object> getAdjacentPojos(Object pojo) {
@@ -155,8 +181,8 @@ public class SerializationContext {
             log.trace("skipping \"{}\" as it is a enum property", method.getName());
             return false;
         }
-        boolean doesNotNeedIdentityMapper = typeToJavaCreateCodeFunctions.doesNotNeedIdentityMapper(method);
-        if (doesNotNeedIdentityMapper) {
+        boolean isBuiltinType = factoryCodeCreationContext.isBuiltinType(method.getReturnType());
+        if (isBuiltinType) {
             log.trace("skipping \"{}\" as it can be created in-place", method.getName());
             return false;
         }
