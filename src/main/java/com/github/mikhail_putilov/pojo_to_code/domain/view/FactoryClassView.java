@@ -1,15 +1,17 @@
 package com.github.mikhail_putilov.pojo_to_code.domain.view;
 
+import lombok.Builder;
 import lombok.Data;
+import lombok.Singular;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 @Data
+@Builder
 public class FactoryClassView {
     private String packageName;
-    private Collection<String> imports = new ArrayList<>();
+    private Collection<String> imports;
     private String className;
-    private List<FactoryMethodView> factories = new ArrayList<>();
+    @Singular
+    private Collection<FactoryMethodView> factories;
 }

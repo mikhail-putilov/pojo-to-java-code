@@ -14,12 +14,12 @@ import java.util.Objects;
  * A collection of predefined {@link TypeToJavaCreateCodeFunction} functions
  */
 @RequiredArgsConstructor
-public class FactoryCodeCreationContext {
+public class CodeCreationNameResolver {
     private final NameResolver nameResolver;
     private final Map<Class<?>, Object> builtinTypes = new HashMap<>();
 
-    public static FactoryCodeCreationContext createDefault(NameResolver nameResolver) {
-        var local = new FactoryCodeCreationContext(nameResolver);
+    public static CodeCreationNameResolver createDefault(NameResolver nameResolver) {
+        var local = new CodeCreationNameResolver(nameResolver);
         local.put(Long.class, String::valueOf);
         local.put(long.class, String::valueOf);
         local.put(long[].class, arr -> "new long[]{" + replaceBrackets(Arrays.toString(arr)) + "}");
@@ -59,15 +59,22 @@ public class FactoryCodeCreationContext {
         builtinTypes.put(Objects.requireNonNull(clazz), mapper);
     }
 
-    public String get(Object object) {
-        Object mapper = builtinTypes.get(object.getClass());
-        if (mapper != null) {
-            //noinspection unchecked
-            return ((TypeToJavaCreateCodeFunction) mapper).typeToJavaCreateCode(object);
-        }
-        return nameResolver.resolveFactoryMethodName(object);
+    private TypeToJavaCreateCodeFunction getRaw(Class<?> clazz) {
+        return (TypeToJavaCreateCodeFunction) builtinTypes.get(clazz);
     }
 
+    @SuppressWarnings("unchecked")
+    public String get(Object object) {
+        TypeToJavaCreateCodeFunction mapper = getRaw(object.getClass());
+        if (mapper != null) {
+            return mapper.typeToJavaCreateCode(object);
+        } else if (object.getClass().isEnum()) {
+            var enums = object.getClass().getEnumConstants();
+            int i = Arrays.asList(enums).indexOf(object);
+            return nameResolver.resolveReturnType(object.getClass()) + "." + enums[i];
+        }
+        return nameResolver.resolveFactoryMethodName(object) + "()";
+    }
 
     public boolean isBuiltinType(Class<?> clazz) {
         return builtinTypes.containsKey(clazz);

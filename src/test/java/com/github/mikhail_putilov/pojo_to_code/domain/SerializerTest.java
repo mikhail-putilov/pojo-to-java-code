@@ -24,65 +24,100 @@ public class SerializerTest {
     @Test
     public void writePojoToCode() {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojo());
-        String expectedJavaCode = "public SimplePojo createSimplePojo() {\n" +
-            "    SimplePojo simplePojo = new SimplePojo();\n" +
-            "    simplePojo.setAge(12);\n" +
-            "    simplePojo.setName(\"name1\");\n" +
-            "    simplePojo.setIndex(13025);\n" +
-            "    return simplePojo;\n" +
+        String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
+            "\n" +
+            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo\n" +
+            "\n" +
+            "public class CreateSimplePojo {\n" +
+            "\n" +
+            "    public SimplePojo createSimplePojo() {\n" +
+            "        SimplePojo bean = new SimplePojo();\n" +
+            "        bean.setAge(12);\n" +
+            "        bean.setIndex(13025);\n" +
+            "        bean.setName(\"name1\");\n" +
+            "        return bean;\n" +
+            "    }\n" +
+            "\n" +
             "}\n";
-        log.info(actualJavaCode);
-        log.info(expectedJavaCode);
+        log.info("actual: {}", actualJavaCode);
+        log.info("expected: {}", expectedJavaCode);
         assertThat(actualJavaCode, is(expectedJavaCode));
     }
 
     @Test
     public void writePojo2ToCode() {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojo2());
-        String expectedJavaCode = "public SimplePojo2 createSimplePojo2() {\n" +
-            "    SimplePojo2 simplePojo2 = new SimplePojo2();\n" +
-            "    simplePojo2.setAges(new int[]{12, 13, 14});\n" +
-            "    simplePojo2.setJustDate(LocalDate.parse(\"2012-03-17\"));\n" +
-            "    simplePojo2.setName(\"Joe \\\"Captain Crunch\\\" Doe\");\n" +
-            "    return simplePojo2;\n" +
+        String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
+            "\n" +
+            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo2\n" +
+            "\n" +
+            "public class CreateSimplePojo2 {\n" +
+            "\n" +
+            "    public SimplePojo2 createSimplePojo2() {\n" +
+            "        SimplePojo2 bean = new SimplePojo2();\n" +
+            "        bean.setAges(new int[]{12, 13, 14});\n" +
+            "        bean.setJustDate(LocalDate.parse(\"2012-03-17\"));\n" +
+            "        bean.setName(\"Joe \\\"Captain Crunch\\\" Doe\");\n" +
+            "        return bean;\n" +
+            "    }\n" +
+            "\n" +
             "}\n";
-        log.info(expectedJavaCode);
-        log.info(actualJavaCode);
+        log.info("actual: {}", actualJavaCode);
+        log.info("expected: {}", expectedJavaCode);
         assertThat(actualJavaCode, is(expectedJavaCode));
     }
 
     @Test
     public void writePojo3ToCode() {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojo3());
-        String expectedJavaCode = "public SimplePojo2 createSimplePojo2() {\n" +
-            "    SimplePojo2 simplePojo2 = new SimplePojo2();\n" +
-            "    simplePojo2.setJustDate(LocalDate.parse(\"2012-03-17\"));\n" +
-            "    simplePojo2.setAges(new int[]{12, 13, 14});\n" +
-            "    simplePojo2.setName(\"Joe \\\"Captain Crunch\\\" Doe\");\n" +
-            "    return simplePojo2;\n" +
-            "}\n" +
-            "public SimplePojo3 createSimplePojo3() {\n" +
-            "    SimplePojo3 simplePojo3 = new SimplePojo3();\n" +
-            "    simplePojo3.setAges(new int[]{12, 13, 14});\n" +
-            "    simplePojo3.setName(\"okay okay\");\n" +
-            "    simplePojo3.setRefToPojo(createSimplePojo2());\n" +
-            "    return simplePojo3;\n" +
+        String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
+            "\n" +
+            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo2\n" +
+            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo3\n" +
+            "\n" +
+            "public class CreateSimplePojo3 {\n" +
+            "\n" +
+            "    public SimplePojo2 createSimplePojo2() {\n" +
+            "        SimplePojo2 bean = new SimplePojo2();\n" +
+            "        bean.setAges(new int[]{12, 13, 14});\n" +
+            "        bean.setJustDate(LocalDate.parse(\"2012-03-17\"));\n" +
+            "        bean.setName(\"Joe \\\"Captain Crunch\\\" Doe\");\n" +
+            "        return bean;\n" +
+            "    }\n" +
+            "    public SimplePojo3 createSimplePojo3() {\n" +
+            "        SimplePojo3 bean = new SimplePojo3();\n" +
+            "        bean.setAges(new int[]{12, 13, 14});\n" +
+            "        bean.setName(\"okay okay\");\n" +
+            "        bean.setRefToPojo(createSimplePojo2());\n" +
+            "        return bean;\n" +
+            "    }\n" +
+            "\n" +
             "}\n";
-        log.info(expectedJavaCode);
-        log.info(actualJavaCode);
+        log.info("actual: {}", actualJavaCode);
+        log.info("expected: {}", expectedJavaCode);
         assertThat(actualJavaCode, is(expectedJavaCode));
     }
 
     @Test
     public void writePojoWithEnumToCode() {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojoWithEnum());
-        String expectedJavaCode = "public SimplePojoWithEnum createSimplePojoWithEnum() {\n" +
-            "    SimplePojoWithEnum simplePojoWithEnum = new SimplePojoWithEnum();\n" +
-            "    simplePojoWithEnum.setEnumProp(AbcEnum.ABC);\n" +
-            "    simplePojoWithEnum.setIndex(13025);\n" +
-            "    return simplePojoWithEnum;\n" +
+        String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
+            "\n" +
+            "import com.github.mikhail_putilov.pojo_to_code.domain.AbcEnum\n" +
+            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojoWithEnum\n" +
+            "\n" +
+            "public class CreateSimplePojoWithEnum {\n" +
+            "\n" +
+            "    public SimplePojoWithEnum createSimplePojoWithEnum() {\n" +
+            "        SimplePojoWithEnum bean = new SimplePojoWithEnum();\n" +
+            "        bean.setEnumProp(AbcEnum.ABC);\n" +
+            "        bean.setIndex(13025);\n" +
+            "        return bean;\n" +
+            "    }\n" +
+            "\n" +
             "}\n";
-        log.info(actualJavaCode);
+        log.info("actual: {}", actualJavaCode);
+        log.info("expected: {}", expectedJavaCode);
         assertThat(actualJavaCode, is(expectedJavaCode));
     }
 }
