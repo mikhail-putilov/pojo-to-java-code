@@ -1,7 +1,6 @@
 package com.github.mikhail_putilov.pojo_to_code.domain;
 
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.util.ReflectionUtils;
 
@@ -9,54 +8,58 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.Function;
+import java.util.function.Predicate;
 
 import static com.github.mikhail_putilov.pojo_to_code.domain.ExceptionUtils.invokeGetterOnPojo;
 
 @Slf4j
+@Builder
 class Dfs {
     private final Set<Object> visitedPojos = Collections.newSetFromMap(new IdentityHashMap<>());
-    private final Set<Class<?>> doNotTraverseTheseTypes = Set.of(Class.class, ClassLoader.class);
-    private final Function<Class<?>, Boolean> doNotTraverseThoseClassesToo;
-    @Setter
-    @Getter
-    private boolean skipEnums = true;
+    private final Set<Class<?>> skipAllPropertiesForTheseTypes = Set.of(Class.class, ClassLoader.class);
+    @SuppressWarnings("UnusedAssignment")
+    @Builder.Default
+    private Predicate<Class<?>> skipAllPropertiesForThisType = a -> false;
+    @SuppressWarnings("UnusedAssignment")
+    @Builder.Default
+    private Consumer<Object> postOrderVisitFunc = a -> {
+    };
+    @SuppressWarnings("UnusedAssignment")
+    @Builder.Default
+    private Consumer<Object> preOrderVisitFunc = a -> {
+    };
+    @SuppressWarnings("UnusedAssignment")
+    @Builder.Default
+    private Predicate<Class<?>> skipPropertyWithType = clazz -> false;
+    private Object target;
 
-    Dfs(Function<Class<?>, Boolean> doNotTraverseThoseClassesToo) {
-        this.doNotTraverseThoseClassesToo = doNotTraverseThoseClassesToo;
+    void dfsTraverse() {
+        _dfsTraverse(target);
     }
 
-    void reset() {
-        visitedPojos.clear();
-        setSkipEnums(true);
-    }
-
-    void dfsTraverse(Object pojo, Consumer<Object> postOrderVisitFunc) {
+    private void _dfsTraverse(Object pojo) {
         visitedPojos.add(pojo);
-        if (!isStopNeeded(pojo.getClass())) {
-            // if pojo is not in a stop list, we traverse its adjacent pojos
-            for (Object adjacentPojo : getAdjacentPojos(pojo)) {
-                if (!visitedPojos.contains(adjacentPojo)) {
-                    dfsTraverse(adjacentPojo, postOrderVisitFunc);
-                }
+        preOrderVisitFunc.accept(pojo);
+        for (Object adjacentPojo : getAdjacentPojos(pojo)) {
+            if (!visitedPojos.contains(adjacentPojo)) {
+                _dfsTraverse(adjacentPojo);
             }
         }
         postOrderVisitFunc.accept(pojo);
     }
 
-    /**
-     * during DFS java object traversal, we don't need to go deep into Class, ClassLoader and Enum objects.
-     */
-    private boolean isStopNeeded(Class<?> aClass) {
-        return doNotTraverseTheseTypes.contains(aClass) || aClass.isEnum();
-    }
-
-
     private List<Object> getAdjacentPojos(Object pojo) {
         log.trace("getAdjacentPojos {}", pojo);
+        if (skipAllPropertiesForThisType.test(pojo.getClass()) || skipAllPropertiesForTheseTypes.contains(pojo.getClass())) {
+            return List.of();
+        }
         List<Object> pojos = new ArrayList<>();
         ReflectionUtils.doWithMethods(pojo.getClass(),
-            getter -> pojos.add(invokeGetterOnPojo(pojo, getter)),
+            getter -> {
+                if (!skipPropertyWithType.test(getter.getReturnType())) {
+                    pojos.add(invokeGetterOnPojo(pojo, getter));
+                }
+            },
             this::filterNonPrimitiveGetters);
         return pojos;
     }
@@ -119,15 +122,11 @@ class Dfs {
             log.trace("skipping \"{}\" as it is a primitive property", method.getName());
             return false;
         }
-        if (returnType.isEnum() && isSkipEnums()) {
-            log.trace("skipping \"{}\" as it is a enum property", method.getName());
-            return false;
-        }
-        boolean isNotTraversable = doNotTraverseThoseClassesToo.apply(method.getReturnType());
-        if (isNotTraversable) {
-            log.trace("skipping \"{}\" as it can be created in-place", method.getName());
-            return false;
-        }
+//        boolean isNotTraversable = skipAllPropertiesForThisType.test(method.getReturnType());
+//        if (isNotTraversable) {
+//            log.trace("skipping \"{}\" as it can be created in-place", method.getName());
+//            return false;
+//        }
         return true;
     }
 }

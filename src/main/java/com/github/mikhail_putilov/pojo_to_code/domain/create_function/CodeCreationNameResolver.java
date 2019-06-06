@@ -55,6 +55,10 @@ public class CodeCreationNameResolver {
         return local;
     }
 
+    public boolean isJavaLang(Class<?> clazz) {
+        return clazz.isArray() ? clazz.getComponentType().getPackageName().startsWith("java.lang") : clazz.getPackageName().startsWith("java.lang");
+    }
+
     private <T> void put(Class<T> clazz, TypeToJavaCreateCodeFunction<T> mapper) {
         builtinTypes.put(Objects.requireNonNull(clazz), mapper);
     }

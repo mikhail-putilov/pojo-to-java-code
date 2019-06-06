@@ -1,5 +1,6 @@
 package com.github.mikhail_putilov.pojo_to_code.domain;
 
+import com.github.mikhail_putilov.pojo_to_code.DummyEnum;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.Test;
@@ -26,8 +27,6 @@ public class SerializerTest {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojo());
         String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
             "\n" +
-            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo\n" +
-            "\n" +
             "public class CreateSimplePojo {\n" +
             "\n" +
             "    public SimplePojo createSimplePojo() {\n" +
@@ -49,7 +48,7 @@ public class SerializerTest {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojo2());
         String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
             "\n" +
-            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo2\n" +
+            "import java.time.LocalDate;\n" +
             "\n" +
             "public class CreateSimplePojo2 {\n" +
             "\n" +
@@ -72,8 +71,7 @@ public class SerializerTest {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojo3());
         String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
             "\n" +
-            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo2\n" +
-            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojo3\n" +
+            "import java.time.LocalDate;\n" +
             "\n" +
             "public class CreateSimplePojo3 {\n" +
             "\n" +
@@ -103,14 +101,33 @@ public class SerializerTest {
         final String actualJavaCode = serializer.writePojoToCode(new SimplePojoWithEnum());
         String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
             "\n" +
-            "import com.github.mikhail_putilov.pojo_to_code.domain.AbcEnum\n" +
-            "import com.github.mikhail_putilov.pojo_to_code.domain.SimplePojoWithEnum\n" +
-            "\n" +
             "public class CreateSimplePojoWithEnum {\n" +
             "\n" +
             "    public SimplePojoWithEnum createSimplePojoWithEnum() {\n" +
             "        SimplePojoWithEnum bean = new SimplePojoWithEnum();\n" +
             "        bean.setEnumProp(AbcEnum.ABC);\n" +
+            "        bean.setIndex(13025);\n" +
+            "        return bean;\n" +
+            "    }\n" +
+            "\n" +
+            "}\n";
+        log.info("actual: {}", actualJavaCode);
+        log.info("expected: {}", expectedJavaCode);
+        assertThat(actualJavaCode, is(expectedJavaCode));
+    }
+
+    @Test
+    public void writePojoWithEnumFromDifferentFileToCode() {
+        final String actualJavaCode = serializer.writePojoToCode(new SimplePojoWithEnum2());
+        String expectedJavaCode = "package com.github.mikhail_putilov.pojo_to_code.domain;\n" +
+            "\n" +
+            "import com.github.mikhail_putilov.pojo_to_code.DummyEnum;\n" +
+            "\n" +
+            "public class CreateSimplePojoWithEnum2 {\n" +
+            "\n" +
+            "    public SimplePojoWithEnum2 createSimplePojoWithEnum2() {\n" +
+            "        SimplePojoWithEnum2 bean = new SimplePojoWithEnum2();\n" +
+            "        bean.setEnumProp(DummyEnum.A);\n" +
             "        bean.setIndex(13025);\n" +
             "        return bean;\n" +
             "    }\n" +
@@ -150,5 +167,11 @@ enum AbcEnum {
 @Data
 class SimplePojoWithEnum {
     AbcEnum enumProp = AbcEnum.ABC;
+    long index = 13025;
+}
+
+@Data
+class SimplePojoWithEnum2 {
+    DummyEnum enumProp = DummyEnum.A;
     long index = 13025;
 }

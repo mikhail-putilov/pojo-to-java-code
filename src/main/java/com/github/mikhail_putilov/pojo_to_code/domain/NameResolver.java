@@ -1,6 +1,7 @@
 package com.github.mikhail_putilov.pojo_to_code.domain;
 
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 public class NameResolver {
@@ -36,9 +37,11 @@ public class NameResolver {
         return counter == 1 ? returnType.getSimpleName() : returnType.getCanonicalName();
     }
 
-    public Collection<String> resolveImports() {
+    public Collection<String> resolveImports(Predicate<String> additionalFilter) {
         return allClasses.stream()
             .map(Class::getCanonicalName)
+            .filter(a -> !a.startsWith("java.lang"))
+            .filter(additionalFilter)
             .collect(Collectors.toCollection(TreeSet::new));
     }
 }

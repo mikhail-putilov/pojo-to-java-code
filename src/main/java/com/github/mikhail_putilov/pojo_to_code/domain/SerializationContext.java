@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.lang.reflect.Method;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static com.github.mikhail_putilov.pojo_to_code.domain.ExceptionUtils.invokeGetterOnPojo;
@@ -34,33 +35,37 @@ public class SerializationContext {
     }
 
     public FactoryClassView generateFactoryClass() {
-        dfs = new Dfs(codeCreationNameResolver::isBuiltinType);
-        dfs.setSkipEnums(false);
-        dfs.dfsTraverse(pojo, this::firstPostOrderVisit);
+        dfs = Dfs.builder()
+            .target(pojo)
+            .preOrderVisitFunc(nameResolver::learnClass)
+            .skipPropertyWithType(codeCreationNameResolver::isJavaLang)
+            .skipAllPropertiesForThisType(codeCreationNameResolver::isBuiltinType)
+            .build();
+        dfs.dfsTraverse();
 
         afterLearningAllClassesBeforeSecondTraverse();
 
-        dfs.dfsTraverse(pojo, this::postOrderVisit);
+        dfs = Dfs.builder()
+            .target(pojo)
+            .postOrderVisitFunc(this::postOrderVisit)
+            .skipPropertyWithType(clazz -> codeCreationNameResolver.isBuiltinType(clazz) || clazz.isEnum())
+            .build();
+        dfs.dfsTraverse();
         return buildFactoryClassView();
     }
 
     private void afterLearningAllClassesBeforeSecondTraverse() {
         nameResolver.afterLearningAllClasses();
-        dfs.reset();
     }
 
     private FactoryClassView buildFactoryClassView() {
-        result.className("Create" + pojo.getClass().getSimpleName())
-            .imports(nameResolver.resolveImports())
-            .packageName(pojo.getClass().getPackageName());
-        return result.build();
-    }
+        String packageName = pojo.getClass().getPackageName();
+        Predicate<String> dropTheseImports = importStr -> !importStr.startsWith(packageName);
 
-    /**
-     * Gather information about all types, so that we can resolve name clashes effectively
-     */
-    private void firstPostOrderVisit(Object pojo) {
-        nameResolver.learnClass(pojo);
+        result.className("Create" + pojo.getClass().getSimpleName())
+            .imports(nameResolver.resolveImports(dropTheseImports))
+            .packageName(packageName);
+        return result.build();
     }
 
     private void postOrderVisit(Object pojo) {
