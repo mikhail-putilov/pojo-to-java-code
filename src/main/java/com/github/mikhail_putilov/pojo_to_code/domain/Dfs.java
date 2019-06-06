@@ -122,11 +122,6 @@ class Dfs {
             log.trace("skipping \"{}\" as it is a primitive property", method.getName());
             return false;
         }
-//        boolean isNotTraversable = skipAllPropertiesForThisType.test(method.getReturnType());
-//        if (isNotTraversable) {
-//            log.trace("skipping \"{}\" as it can be created in-place", method.getName());
-//            return false;
-//        }
         return true;
     }
 }
